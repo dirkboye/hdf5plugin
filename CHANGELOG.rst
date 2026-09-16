@@ -1,3 +1,15 @@
+Unreleased
+----------
+
+- Compression filters and libraries:
+
+  * Added **Terse** filter: `TERSE/PROLIX (TRPX) v2.0 <https://github.com/senikm/trpx2.0>`_ (commit 6121818),
+    patched to retrieve the dataset's data type with a ``set_local`` callback.
+
+- Build:
+
+  * Added support of C++20 compile flag handling for filter extensions (previously only for static libraries)
+
 7.1.0: 01/09/02026
 ------------------
 
