@@ -169,6 +169,49 @@ size_t Terse_filter_cpp(unsigned int flags, size_t cd_nelmts, const unsigned int
 }
 
 /**
+ * @brief HDF5 "set_local" callback of the Terse HDF5 filter.
+ *
+ * HDF5 calls this function once when a dataset using the Terse filter is
+ * created. It retrieves the dataset's datatype and stores the corresponding
+ * data type code as `cd_values[0]`, which `Terse_filter` uses to (de)compress.
+ * Any `cd_values` provided by the user are replaced, so the type code always
+ * matches the dataset's datatype.
+ *
+ * @param dcpl_id The dataset creation property list.
+ * @param type_id The datatype of the dataset.
+ * @param space_id The dataspace of the dataset (unused).
+ * @return A non-negative value on success, a negative value if the datatype
+ *         is not supported or an error occurs.
+ */
+static herr_t Terse_set_local(hid_t dcpl_id, hid_t type_id, hid_t space_id) {
+    if (H5Tget_class(type_id) != H5T_INTEGER) {
+        std::cerr << "Terse filter only supports integer datasets" << std::endl;
+        return -1;
+    }
+    H5T_sign_t sign = H5Tget_sign(type_id);
+    if (sign == H5T_SGN_ERROR) return -1;
+    bool is_signed = sign != H5T_SGN_NONE;
+    unsigned int data_type_code;
+    switch (H5Tget_size(type_id)) {
+        case 1: data_type_code = is_signed ? TYPE_CODE_INT8  : TYPE_CODE_UINT8;  break;
+        case 2: data_type_code = is_signed ? TYPE_CODE_INT16 : TYPE_CODE_UINT16; break;
+        case 4: data_type_code = is_signed ? TYPE_CODE_INT32 : TYPE_CODE_UINT32; break;
+        default:
+            std::cerr << "Terse filter only supports 8-, 16- and 32-bit integer datasets" << std::endl;
+            return -1;
+    }
+    unsigned int flags;
+    size_t cd_nelmts = 1;
+    unsigned int cd_values[1] = {0};
+    if (H5Pget_filter_by_id2(dcpl_id, TERSE_FILTER_ID, &flags, &cd_nelmts, cd_values, 0, NULL, NULL) < 0)
+        return -1;
+    cd_values[0] = data_type_code;
+    if (H5Pmodify_filter(dcpl_id, TERSE_FILTER_ID, flags, 1, cd_values) < 0)
+        return -1;
+    return 1;
+}
+
+/**
  * @brief Main C-code entry point for the Terse HDF5 filter.
  *
  * This function serves as the primary entry point for integrating the Terse
@@ -198,7 +241,7 @@ extern "C" herr_t register_terse_filter() {
        1,
        "TERSE",
        NULL,
-       NULL,
+       Terse_set_local,
        Terse_filter
    };
    return H5Zregister(&filter_class);
@@ -212,7 +255,7 @@ extern "C" const void* H5PLget_plugin_info(void) {
        1,
        "TERSE",
        NULL,
-       NULL,
+       Terse_set_local,
        Terse_filter
    };
    return static_cast<const void*>(&filter_class);
